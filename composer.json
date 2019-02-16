@@ -1,0 +1,14 @@
+{
+    "name": "paulsnar/redis",
+    "type": "library",
+    "license": "UNLICENSED",
+    "authors": [ { "name": "paulsnar", "email": "paulsnar@paulsnar.lv" } ],
+    "require": {
+        "php": "^7.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "PN\\Redis\\": "src"
+        }
+    }
+}
