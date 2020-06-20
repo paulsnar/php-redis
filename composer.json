@@ -1,9 +1,9 @@
 {
     "name": "paulsnar/redis",
     "type": "library",
-    "license": "UNLICENSED",
+    "license": "0BSD",
     "version": "1.0.0",
-    "authors": [ { "name": "paulsnar", "email": "paulsnar@paulsnar.lv" } ],
+    "authors": [{"name": "paulsnar", "email": "paulsnar@paulsnar.lv"}],
     "require": {
         "php": "^7.1"
     },
