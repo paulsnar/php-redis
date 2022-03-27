@@ -15,7 +15,7 @@ class Connection
     $s = $this->s = stream_socket_client(
       "tcp://{$host}:{$port}", $errno, $errstr, $timeout);
     if ($s === false) {
-      throw new \Exception("Connection failed: {$errstr}", $errno);
+      throw new \RuntimeException("Redis connection failed: {$errstr}", $errno);
     }
 
     stream_set_timeout($s, $timeout);
@@ -31,12 +31,12 @@ class Connection
     fclose($this->s);
   }
 
-  public function timeout($sec, $msec = 0)
+  public function setTimeout($sec, $msec = 0)
   {
     return stream_set_timeout($this->s, $sec, $msec);
   }
 
-  public function write(array $args)
+  protected function write(array $args)
   {
     $argc = count($args);
     $buf = "*{$argc}\r\n";
@@ -50,7 +50,7 @@ class Connection
     fflush($this->s);
   }
 
-  public function read()
+  protected function read()
   {
     $chunk = fgets($this->s);
     if ($chunk === false || $chunk === '') {
@@ -102,38 +102,26 @@ class Connection
         for ($i = 0; $i < $count; $i += 1) {
           $a[$i] = $this->read();
         }
-        return new RedisArray($a);
+        return $a;
     }
 
     throw new \Exception(
       "REPL protocol failure: unknown response type: {$prefix}");
   }
 
-  public function invoke(string $cmd, ...$args)
+  public function call(string $command, ...$args)
   {
-    $params = [ ];
-    $params[] = strtoupper($cmd);
-    foreach ($args as $arg) {
-      if (is_array($arg)) {
-        if (array_key_exists(0, $arg)) {
-          foreach ($arg as $x) {
-            $params[] = $x;
-          }
-        } else {
-          foreach ($arg as $key => $value) {
-            array_push($params, $key, $value);
-          }
-        }
+    // Flatten any keyword args if present.
+    $flatArgs = [strtoupper($command)];
+    foreach ($args as $key => $arg) {
+      if (is_string($key)) {
+        array_push($flatArgs, $key, (string) $arg);
       } else {
-        $params[] = (string) $arg;
+        array_push($flatArgs, (string) $arg);
       }
     }
-    return $this->write($params);
-  }
 
-  public function __invoke(string $cmd, ...$args)
-  {
-    $this->invoke($cmd, ...$args);
+    $this->write($flatArgs);
     return $this->read();
   }
 }
