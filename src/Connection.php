@@ -115,7 +115,7 @@ class Connection
     $flatArgs = [strtoupper($command)];
     foreach ($args as $key => $arg) {
       if (is_string($key)) {
-        array_push($flatArgs, $key, (string) $arg);
+        array_push($flatArgs, strtoupper($key), (string) $arg);
       } else {
         array_push($flatArgs, (string) $arg);
       }
