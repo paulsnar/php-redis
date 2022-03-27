@@ -2,7 +2,7 @@
     "name": "paulsnar/redis",
     "type": "library",
     "license": "0BSD",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "authors": [{"name": "paulsnar", "email": "paulsnar@paulsnar.lv"}],
     "require": {
         "php": "^7.1|^8.0"
