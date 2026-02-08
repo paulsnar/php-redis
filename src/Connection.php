@@ -4,36 +4,73 @@ namespace PN\Redis;
 
 class Connection
 {
-  protected $s, $sub = false;
-
-  public function __construct(array $opts = [ ])
+  protected function __construct(
+    /** @var resource $s */
+    protected readonly mixed $s,
+    protected readonly bool $close = true,
+  )
   {
-    $host = $opts['host'] ?? '127.0.0.1';
-    $port = $opts['port'] ?? 6379;
-    $timeout = $opts['timeout'] ?? 1;
+  }
 
-    $s = $this->s = stream_socket_client(
-      "tcp://{$host}:{$port}", $errno, $errstr, $timeout);
+  public static function connect(string $host = '127.0.0.1', int $port = 6379, float $timeout = 1.0): static
+  {
+    $s = stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, $timeout);
     if ($s === false) {
       throw new \RuntimeException("Redis connection failed: {$errstr}", $errno);
     }
 
-    stream_set_timeout($s, $timeout);
-
-    if (function_exists('socket_import_stream')) {
+    if (extension_loaded('sockets')) {
       $sock = socket_import_stream($s);
       socket_set_option($sock, \SOL_TCP, \TCP_NODELAY, 1);
     }
+
+    $self = new static($s, close: true);
+    $self->setTimeout($timeout);
+    return $self;
+  }
+
+  public static function persistent(string $host = '127.0.0.1', int $port = 6379, float $timeout = 1.0): static
+  {
+    $s = pfsockopen("tcp://{$host}", $port, $errno, $errstr, $timeout);
+    if ($s === false) {
+      throw new \RuntimeException("Redis connection failed: {$errstr}", $errno);
+    }
+
+    $reused = ftell($s) !== 0;
+
+    $self = new static($s, close: false);
+    if ($reused) {
+      try {
+        $re = $self->call('PING');
+        assert($re instanceof Status && $re->content === 'PONG');
+      } catch (\Exception $exc) {
+        fclose($s);
+        $s = pfsockopen("tcp://{$host}", $port, $errno, $errstr, $timeout);
+        if ($s === false) {
+          throw new \RuntimeException("Redis connection failed: {$errstr}", $errno, previous: $exc);
+        }
+        $self = new static($s, close: false);
+      }
+    }
+
+    $self->setTimeout($timeout);
+    return $self;
   }
 
   public function __destruct()
   {
-    fclose($this->s);
+    if ($this->close) {
+      fclose($this->s);
+    }
   }
 
-  public function setTimeout($sec, $msec = 0)
+  public function setTimeout(float $timeout): void
   {
-    return stream_set_timeout($this->s, $sec, $msec);
+    $sec = (int)$timeout;
+    $usec = (int)floor(($timeout * 1e6) % 1e6);
+    if (stream_set_timeout($this->s, $sec, $usec) === false) {
+      throw new \RuntimeException("Failed to set stream timeout");
+    }
   }
 
   protected function write(array $args)
