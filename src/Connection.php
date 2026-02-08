@@ -5,8 +5,7 @@ namespace PN\Redis;
 class Connection
 {
   protected function __construct(
-    /** @var resource $s */
-    protected readonly mixed $s,
+    protected readonly Io $io,
     protected readonly bool $close = true,
   )
   {
@@ -19,12 +18,13 @@ class Connection
       throw new \RuntimeException("Redis connection failed: {$errstr}", $errno);
     }
 
+    $io = new Io($s);
+
     if (extension_loaded('sockets')) {
-      $sock = socket_import_stream($s);
-      socket_set_option($sock, \SOL_TCP, \TCP_NODELAY, 1);
+      $io->setOption(\SOL_TCP, \TCP_NODELAY, 1);
     }
 
-    $self = new static($s, close: true);
+    $self = new static($io, close: true);
     $self->setTimeout($timeout);
     return $self;
   }
@@ -36,9 +36,11 @@ class Connection
       throw new \RuntimeException("Redis connection failed: {$errstr}", $errno);
     }
 
-    $reused = ftell($s) !== 0;
+    $io = new Io($s);
 
-    $self = new static($s, close: false);
+    $reused = $io->tell() !== 0;
+
+    $self = new static($io, close: false);
     if ($reused) {
       try {
         $re = $self->call('PING');
@@ -49,7 +51,8 @@ class Connection
         if ($s === false) {
           throw new \RuntimeException("Redis connection failed: {$errstr}", $errno, previous: $exc);
         }
-        $self = new static($s, close: false);
+        $io = new Io($s);
+        $self = new static($io, close: false);
       }
     }
 
@@ -60,7 +63,7 @@ class Connection
   public function __destruct()
   {
     if ($this->close) {
-      fclose($this->s);
+      $this->io->close();
     }
   }
 
@@ -68,9 +71,7 @@ class Connection
   {
     $sec = (int)$timeout;
     $usec = (int)floor(($timeout * 1e6) % 1e6);
-    if (stream_set_timeout($this->s, $sec, $usec) === false) {
-      throw new \RuntimeException("Failed to set stream timeout");
-    }
+    $this->io->streamSetTimeout($sec, $usec);
   }
 
   protected function write(array $args): void
@@ -83,17 +84,16 @@ class Connection
       $buf .= "\${$argl}\r\n{$arg}\r\n";
     }
 
-    $re = fwrite($this->s, $buf);
-    if ($re !== strlen($buf)) {
-      throw new \RuntimeException("Failed to write");
-    }
-    fflush($this->s);
+    $this->io->write($buf);
+    $this->io->flush();
   }
 
   protected function read(): null|int|string|array|Status
   {
-    $chunk = fgets($this->s);
-    if ($chunk === false || $chunk === '') {
+    $chunk = $this->io->gets();
+    if ($chunk === null) {
+      throw new \Exception("Connection closed");
+    } else if ($chunk === '') {
       throw new \Exception('RESP protocol failure: empty chunk');
     }
 
@@ -122,7 +122,7 @@ class Connection
         $remaining = ($size += 2);
 
         do {
-          $chunk = fread($this->s, min($remaining, 8192));
+          $chunk = $this->io->read(min($remaining, 8192));
           if ($chunk === false || $chunk === '') {
             throw new \Exception('RESP protocol failure: empty chunk');
           }
@@ -157,7 +157,7 @@ class Connection
       if (is_string($key)) {
         array_push($flatArgs, strtoupper($key), (string) $arg);
       } else {
-        array_push($flatArgs, (string) $arg);
+        $flatArgs[] = (string)$arg;
       }
     }
 
