@@ -2,13 +2,12 @@
 
 namespace PN\Redis;
 
-class Status
+readonly class Status
 {
-  public $content;
-
-  public function __construct(string $s)
+  public function __construct(
+    public string $content,
+  )
   {
-    $this->content = $s;
   }
 
   public function __toString()
@@ -16,4 +15,3 @@ class Status
     return $this->content;
   }
 }
-

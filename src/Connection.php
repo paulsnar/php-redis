@@ -73,7 +73,7 @@ class Connection
     }
   }
 
-  protected function write(array $args)
+  protected function write(array $args): void
   {
     $argc = count($args);
     $buf = "*{$argc}\r\n";
@@ -83,15 +83,18 @@ class Connection
       $buf .= "\${$argl}\r\n{$arg}\r\n";
     }
 
-    fwrite($this->s, $buf);
+    $re = fwrite($this->s, $buf);
+    if ($re !== strlen($buf)) {
+      throw new \RuntimeException("Failed to write");
+    }
     fflush($this->s);
   }
 
-  protected function read()
+  protected function read(): null|int|string|array|Status
   {
     $chunk = fgets($this->s);
     if ($chunk === false || $chunk === '') {
-      throw new \Exception('REPL protocol failure: empty chunk');
+      throw new \Exception('RESP protocol failure: empty chunk');
     }
 
     $prefix = $chunk[0];
@@ -121,7 +124,7 @@ class Connection
         do {
           $chunk = fread($this->s, min($remaining, 8192));
           if ($chunk === false || $chunk === '') {
-            throw new \Exception('REPL protocol failure: empty chunk');
+            throw new \Exception('RESP protocol failure: empty chunk');
           }
 
           $bulk .= $chunk;
@@ -143,10 +146,10 @@ class Connection
     }
 
     throw new \Exception(
-      "REPL protocol failure: unknown response type: {$prefix}");
+      "RESP protocol failure: unknown response type: {$prefix}");
   }
 
-  public function call(string $command, ...$args)
+  public function call(string $command, ...$args): null|int|string|array|Status
   {
     // Flatten any keyword args if present.
     $flatArgs = [strtoupper($command)];
