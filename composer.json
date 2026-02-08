@@ -5,7 +5,10 @@
     "version": "2.0.1",
     "authors": [{"name": "paulsnar", "email": "paulsnar@paulsnar.lv"}],
     "require": {
-        "php": "^7.1|^8.0"
+        "php": "^8.3"
+    },
+    "suggest": {
+      "ext-sockets": "for TCP_NODELAY support for better performance"
     },
     "autoload": {
         "psr-4": {
